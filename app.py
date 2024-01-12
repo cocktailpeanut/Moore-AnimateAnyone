@@ -18,6 +18,14 @@ from src.models.unet_3d import UNet3DConditionModel
 from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
 from src.utils.util import get_fps, read_frames, save_videos_grid
 
+if torch.cuda.is_available():
+  device = "cuda"
+elif torch.backends.mps.is_available():
+  device = "mps"
+  torch_dtype = torch.float32
+else:
+  device = "cpu"
+
 
 class AnimateController:
     def __init__(
@@ -47,12 +55,12 @@ class AnimateController:
         if self.pipeline is None:
             vae = AutoencoderKL.from_pretrained(
                 self.config.pretrained_vae_path,
-            ).to("cuda", dtype=self.weight_dtype)
+            ).to(device, dtype=self.weight_dtype)
 
             reference_unet = UNet2DConditionModel.from_pretrained(
                 self.config.pretrained_base_model_path,
                 subfolder="unet",
-            ).to(dtype=self.weight_dtype, device="cuda")
+            ).to(dtype=self.weight_dtype, device=device)
 
             inference_config_path = self.config.inference_config
             infer_config = OmegaConf.load(inference_config_path)
@@ -61,15 +69,15 @@ class AnimateController:
                 self.config.motion_module_path,
                 subfolder="unet",
                 unet_additional_kwargs=infer_config.unet_additional_kwargs,
-            ).to(dtype=self.weight_dtype, device="cuda")
+            ).to(dtype=self.weight_dtype, device=device)
 
             pose_guider = PoseGuider(320, block_out_channels=(16, 32, 96, 256)).to(
-                dtype=self.weight_dtype, device="cuda"
+                dtype=self.weight_dtype, device=device
             )
 
             image_enc = CLIPVisionModelWithProjection.from_pretrained(
                 self.config.image_encoder_path
-            ).to(dtype=self.weight_dtype, device="cuda")
+            ).to(dtype=self.weight_dtype, device=device)
             sched_kwargs = OmegaConf.to_container(infer_config.noise_scheduler_kwargs)
             scheduler = DDIMScheduler(**sched_kwargs)
 
@@ -93,7 +101,7 @@ class AnimateController:
                 pose_guider=pose_guider,
                 scheduler=scheduler,
             )
-            pipe = pipe.to("cuda", dtype=self.weight_dtype)
+            pipe = pipe.to(device, dtype=self.weight_dtype)
             self.pipeline = pipe
 
         pose_images = read_frames(pose_video_path)
