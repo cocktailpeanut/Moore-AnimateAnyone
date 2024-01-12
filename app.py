@@ -268,4 +268,5 @@ def ui():
 
 
 demo = ui()
-demo.launch(share=True)
+#demo.launch(share=True)
+demo.launch()
